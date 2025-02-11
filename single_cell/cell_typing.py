@@ -38,7 +38,7 @@ if __name__ == "__main__":
         os.makedirs(figures_lin, exist_ok=True)
         sc.settings.figdir = figures_lin
         lin_adata = anndata.AnnData(
-            adata[adata.obs["Lineage"] == Lineage].layers['log10'].copy(),
+            adata[adata.obs["Lineage"] == Lineage].layers['log'].copy(),
             obs=adata[adata.obs["Lineage"] == Lineage].obs,
             var=adata[adata.obs["Lineage"] == Lineage].var,
         )
@@ -103,8 +103,8 @@ if __name__ == "__main__":
                 "2": "Lymphatic EC",
                 "3": "Capillary",
                 "4": "Capillary",
-                "5": "Capillary",
-                "6": "Macrovascular",
+                "5": "Venous EC",
+                "6": "Arterial EC",
                 "7": "Capillary",
                 "8": "low-quality",
                 "9": "low-quality",

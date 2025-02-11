@@ -29,10 +29,11 @@ comparison_dictionary = {
     "TNL_GC_v_TNL_BC": ["TNL-BC", "TNL-GC"],
     "TNL_GC_v_PNL_ND": ["PNL-ND", "TNL-GC"],
     "TNL_GC_v_TL_ND": ["TL-ND", "TNL-GC"],
+    "TNL_v_TL ": ["TL", "TNL"],
 }
 if __name__ == "__main__":
     adata = sc.read(f"{data}/uterus_processed_celltyped.gz.h5ad")
-    # ### PSeudobulk
+    # # ### PSeudobulk
     output_p = f"{output}/pseudobulk"
     os.makedirs(output_p, exist_ok=True)
     pdata = dc.get_pseudobulk(
@@ -70,16 +71,20 @@ if __name__ == "__main__":
 
     comp_dict = {}
     for key in comparison_dictionary.keys():
+        if key ==  "TNL_v_TL ":
+            comparison = 'Group'
+        else:
+            comparison = 'GroupContract'
         comp_list = comparison_dictionary[key]
         print(comp_list)
-        compare_pseudo = pdata[pdata.obs["GroupContract"].isin(comp_list)]
+        compare_pseudo = pdata[pdata.obs[comparison].isin(comp_list)]
         print(compare_pseudo)
         ct_dict = {}
         for ct in adata.obs["Cell Subtype"].unique():
             ct_adata = compare_pseudo[compare_pseudo.obs["Cell Subtype"] == ct]
             print(ct_adata)
             genes = dc.filter_by_expr(
-                ct_adata, group="GroupContract", min_count=10, min_total_count=15
+                ct_adata, group=comparison, min_count=10, min_total_count=15
             )
             ct_adata = ct_adata[:, genes].copy()
             if len(genes) < 100:
@@ -91,21 +96,26 @@ if __name__ == "__main__":
                 print(ct)
                 print('Not enough samples')
                 continue
+            if len(ct_adata.obs[comparison].unique())==1:
+                print(ct)
+                print(ct_adata.obs[comparison].unique())
+                print('Only found in one group')
+                continue
             dds = DeseqDataSet(
                 adata=ct_adata,
-                design_factors="GroupContract",
+                design_factors=comparison,
                 ref_level=[
-                    "GroupContract",
-                    sorted(ct_adata.obs["GroupContract"].unique())[0],
+                    comparison,
+                    sorted(ct_adata.obs[comparison].unique())[0],
                 ],
                 refit_cooks=True,
                 n_cpus=8,
             )
             dds.deseq2()
-            contrast = ["GroupContract"] + sorted(
-                ct_adata.obs["GroupContract"].unique()
+            contrast = [comparison] + sorted(
+                ct_adata.obs[comparison].unique()
             )
-            coeff = f"GroupContract_{contrast[-1]}_vs_{contrast[-2]}"
+            coeff = f"{comparison}_{contrast[-1]}_vs_{contrast[-2]}"
             stat_res = DeseqStats(dds, contrast=contrast, n_cpus=8)
             stat_res.summary()
             stat_res.lfc_shrink(coeff=coeff)
@@ -125,30 +135,34 @@ if __name__ == "__main__":
     os.makedirs(output_w, exist_ok=True)
 
     for key in comparison_dictionary.keys():
+        if key == "TNL_v_TL ":
+            comparison = 'Group'
+        else:
+            comparison = 'GroupContract'
         comp_list = comparison_dictionary[key]
-        compare_adata = adata[adata.obs["GroupContract"].isin(comp_list)]
+        compare_adata = adata[adata.obs[comparison].isin(comp_list)]
         ct_dict = {}
         with pd.ExcelWriter(
             f"{output_w}/{key}_wilcoxon_comparisons.xlsx", engine="xlsxwriter"
         ) as writer:
             for ct in sorted(adata.obs["Cell Subtype"].unique()):
                 ct_adata = compare_adata[compare_adata.obs["Cell Subtype"] == ct]
-                if ct_adata.obs['GroupContract'].value_counts().min() < 5:
+                if ct_adata.obs[comparison].value_counts().min() < 5:
                     print(ct)
-                    print(ct_adata.obs['GroupContract'].value_counts())
+                    print(ct_adata.obs[comparison].value_counts())
                     print('Too few cells in group')
                     continue
                 print(ct_adata)
                 try:
                     sc.tl.rank_genes_groups(
                         ct_adata,
-                        groupby="GroupContract",
+                        groupby=comparison,
                         method="wilcoxon",
                         pts=True,
                         key_added="group_contract",
                     )
                     df = sc.get.rank_genes_groups_df(
-                        ct_adata, key="group_contract", group="TNL-GC"
+                        ct_adata, key="group_contract", group=[comp_list[0]]
                     )
                     df.to_excel(writer, sheet_name=f"{ct}"[:31])
                 except:
